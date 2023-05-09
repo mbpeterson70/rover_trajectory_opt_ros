@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <node respawn="false" name="emergency_stop_node" pkg="ugv_utils" type="emergency_stop_node.py" output="screen">
+    <!-- Load parameters -->
+    <rosparam command="load" file="$(find rover_trajectory_opt)/cfg/rover_emergency_stop_params.yaml" />
+  </node>
+  
+</launch>
+
