@@ -25,11 +25,15 @@ class TrajectoryGeneratorNode():
         num_timesteps = rospy.get_param("~trajectory_generator/num_timesteps")
         self.goal_states = {f'{rover}': np.array([rospy.get_param(f"~trajectory_generator/goal_states/{rover}")]) for rover in self.rovers}
         x_bounds = np.array(rospy.get_param(f"~trajectory_generator/x_bounds"))
-        self.u_bounds = np.array(rospy.get_param(f"~trajectory_generator/u_bounds"))
+        u_bounds = np.array(rospy.get_param(f"~trajectory_generator/u_bounds"))
         self.x_bounds = np.zeros(x_bounds.shape)
+        self.u_bounds = np.zeros(u_bounds.shape)
         for i in range(self.x_bounds.shape[0]):
             for j in range(self.x_bounds.shape[1]):
                 self.x_bounds[i,j] = float(x_bounds[i,j])
+        for i in range(self.u_bounds.shape[0]):
+            for j in range(self.u_bounds.shape[1]):
+                self.u_bounds[i,j] = float(u_bounds[i,j])
         # self.publish_control = rospy.get_param("~trajectory_publisher/publish_control")
         
         # Internal variables
@@ -50,14 +54,10 @@ class TrajectoryGeneratorNode():
     def loop_cb(self, event):
         if self.traj_planned:
             for rover in self.rovers:
-                # print(len(self.x_traj[rover][2,:]))
-                # print(len(self.u_traj[rover][1,:]))
-                # print(len(self.t_traj))
                 if self.t > self.tf:
                     self.pub_auto_cmd[rover].publish(Twist())
                     continue
                 v_cmd = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:-1])
-                print(v_cmd)
                 th_dot_cmd = np.interp(self.t, xp=self.t_traj, fp=self.u_traj[rover][1,:])
                 cmd_vel = Twist()
                 cmd_vel.linear.x = v_cmd
@@ -74,10 +74,6 @@ class TrajectoryGeneratorNode():
                 for i, rover in enumerate(self.rovers):
                     x0[i,:] = self.states[rover]
                     xf[i,:] = self.goal_states[rover]
-                print(self.x_bounds)
-                print(self.u_bounds)
-                print(x0)
-                print(xf)
                 self.planner.setup_min_time_opt(x0, xf, tf_guess=10.0, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
                 self.planner.opti.subject_to(self.planner.tf > 1.)
                 x, u, tf = self.planner.solve_opt()
@@ -96,7 +92,6 @@ class TrajectoryGeneratorNode():
         quat = pose_stamped.pose.orientation
         theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.w, quat.z]).as_euler('xyz')[2] + np.pi # add pi because of how theta is defined in Dubins dynamis
         self.states[rover][3] = -((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
-        print(self.states[rover][3])
         
     def twist_cb(self, twist_stamped, rover):
         theta = self.states[rover][3]
