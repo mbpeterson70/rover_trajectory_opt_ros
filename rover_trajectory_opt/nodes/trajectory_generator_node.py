@@ -8,6 +8,7 @@ to navigate to a desired final pose
 import rospy
 from geometry_msgs.msg import PoseStamped, TwistStamped, Twist
 from std_srvs.srv import Trigger
+from rover_trajectory_msgs.msg import RoverState
 
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
@@ -24,6 +25,11 @@ class TrajectoryGeneratorNode():
         self.dt = rospy.get_param("~trajectory_generator/dt")
         num_timesteps = rospy.get_param("~trajectory_generator/num_timesteps")
         self.goal_states = {f'{rover}': np.array([rospy.get_param(f"~trajectory_generator/goal_states/{rover}")]) for rover in self.rovers}
+        self.xf_rover_states = dict()
+        for rover, xf in self.goal_states.items():
+            xf_rover_state = RoverState()
+            xf_rover_state.x, xf_rover_state.y, xf_rover_state.v, xf_rover_state.theta = xf.reshape(-1).tolist()
+            self.xf_rover_states[rover] = xf_rover_state
         x_bounds = np.array(rospy.get_param(f"~trajectory_generator/x_bounds"))
         u_bounds = np.array(rospy.get_param(f"~trajectory_generator/u_bounds"))
         self.x_bounds = np.zeros(x_bounds.shape)
@@ -48,21 +54,32 @@ class TrajectoryGeneratorNode():
         # Pub & Sub
         self.sub_pose = [rospy.Subscriber(f"{rover}/world", PoseStamped, self.pose_cb, queue_size=1, callback_args=rover) for rover in self.rovers]
         self.sub_twist = [rospy.Subscriber(f"{rover}/mocap/twist", TwistStamped, self.twist_cb, queue_size=1, callback_args=rover) for rover in self.rovers]
-        self.pub_auto_cmd = {f'{rover}': rospy.Publisher(f"{rover}/cmd_vel_auto", Twist, queue_size=1) for rover in self.rovers}
+        self.pub_traj = {f'{rover}': rospy.Publisher(f"{rover}/trajectory", RoverState, queue_size=1) for rover in self.rovers}
+        # self.pub_auto_cmd = {f'{rover}': rospy.Publisher(f"{rover}/cmd_vel_auto", Twist, queue_size=1) for rover in self.rovers}
         self.timer = rospy.Timer(rospy.Duration(self.dt), self.loop_cb)
                 
     def loop_cb(self, event):
         if self.traj_planned:
             for rover in self.rovers:
                 if self.t > self.tf:
-                    self.pub_auto_cmd[rover].publish(Twist())
+                    self.pub_traj[rover].publish(self.xf_rover_states[rover])
                     continue
-                v_cmd = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:-1])
-                th_dot_cmd = np.interp(self.t, xp=self.t_traj, fp=self.u_traj[rover][1,:])
-                cmd_vel = Twist()
-                cmd_vel.linear.x = v_cmd
-                cmd_vel.angular.z = th_dot_cmd
-                self.pub_auto_cmd[rover].publish(cmd_vel)
+                rover_state = RoverState()
+                rover_state.x = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][0,:-1])
+                rover_state.y = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][1,:-1])
+                rover_state.v = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:-1])
+                rover_state.theta = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][3,:-1])
+                self.pub_traj[rover].publish(rover_state)
+
+                # if self.t > self.tf:
+                #     self.pub_auto_cmd[rover].publish(Twist())
+                #     continue
+                # v_cmd = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:-1])
+                # th_dot_cmd = np.interp(self.t, xp=self.t_traj, fp=self.u_traj[rover][1,:])
+                # cmd_vel = Twist()
+                # cmd_vel.linear.x = v_cmd
+                # cmd_vel.angular.z = th_dot_cmd
+                # self.pub_auto_cmd[rover].publish(cmd_vel)
             self.t += self.dt
             return
         else:

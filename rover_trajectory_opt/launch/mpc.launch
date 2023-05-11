@@ -1,0 +1,12 @@
+<launch>
+  <arg name="veh" default="$(optenv VEHTYPE RR)" />
+  <arg name="num" default="$(optenv VEHNUM 01)" />
+
+  <group ns="$(arg veh)$(arg num)" >
+    <node respawn="false" name="mpc_node" pkg="rover_trajectory_opt" type="mpc_node.py" output="screen">
+      <!-- Load parameters -->
+      <rosparam command="load" file="$(find rover_trajectory_opt)/cfg/mpc_params.yaml" />
+    </node>
+  </group> 
+  
+</launch>
