@@ -3,5 +3,5 @@ xmin: -4.0
 xmax: 4.0
 ymin: -4.0
 ymax: 4.0
-ugv_radius: 0.5
+ugv_radius: 0.75
 ugvs: ["RR01", "RR04", "RR05", "RR06", "RR08"]
