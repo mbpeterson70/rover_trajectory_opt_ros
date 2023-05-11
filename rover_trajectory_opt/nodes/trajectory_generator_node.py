@@ -55,6 +55,7 @@ class TrajectoryGeneratorNode():
         self.sub_pose = [rospy.Subscriber(f"{rover}/world", PoseStamped, self.pose_cb, queue_size=1, callback_args=rover) for rover in self.rovers]
         self.sub_twist = [rospy.Subscriber(f"{rover}/mocap/twist", TwistStamped, self.twist_cb, queue_size=1, callback_args=rover) for rover in self.rovers]
         self.pub_traj = {f'{rover}': rospy.Publisher(f"{rover}/trajectory", RoverState, queue_size=1) for rover in self.rovers}
+        self.pub_traj_pose = {f'{rover}': rospy.Publisher(f"{rover}/trajectory_pose", PoseStamped, queue_size=1) for rover in self.rovers}
         # self.pub_auto_cmd = {f'{rover}': rospy.Publisher(f"{rover}/cmd_vel_auto", Twist, queue_size=1) for rover in self.rovers}
         self.timer = rospy.Timer(rospy.Duration(self.dt), self.loop_cb)
                 
@@ -70,6 +71,14 @@ class TrajectoryGeneratorNode():
                 rover_state.v = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:-1])
                 rover_state.theta = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][3,:-1])
                 self.pub_traj[rover].publish(rover_state)
+
+                pose = PoseStamped()
+                pose.pose.position.x = rover_state.x
+                pose.pose.position.y = rover_state.y
+                quat = Rot.from_euler('xyz', [0, 0, rover_state.theta]).as_quat()
+                pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w = quat.tolist()
+                pose.header.frame_id = "world"
+                self.pub_traj_pose[rover].publish(pose)
 
                 # if self.t > self.tf:
                 #     self.pub_auto_cmd[rover].publish(Twist())
