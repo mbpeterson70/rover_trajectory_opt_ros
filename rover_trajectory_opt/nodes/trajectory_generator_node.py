@@ -24,6 +24,7 @@ class TrajectoryGeneratorNode():
         self.rovers = rospy.get_param("~trajectory_generator/rovers")
         self.dt = rospy.get_param("~trajectory_generator/dt")
         num_timesteps = rospy.get_param("~trajectory_generator/num_timesteps")
+        min_allowable_dist = rospy.get_param("~trajectory_generator/min_allowable_dist")
         self.goal_states = {f'{rover}': np.array([rospy.get_param(f"~trajectory_generator/goal_states/{rover}")]) for rover in self.rovers}
         self.xf_rover_states = dict()
         for rover, xf in self.goal_states.items():
@@ -46,7 +47,8 @@ class TrajectoryGeneratorNode():
         self.states = {f'{rover}': np.nan*np.ones(4) for rover in self.rovers}
         self.planner = MultiAgentPlanner(dynamics=DubinsDynamics(control=CONTROL_LIN_ACC_ANG_VEL), 
                                          num_agents=len(self.rovers), 
-                                         num_timesteps=num_timesteps)
+                                         num_timesteps=num_timesteps,
+                                         min_allowable_dist=min_allowable_dist)
         self.traj_planned = False
         self.t = 0.0
         self.rover_idx = {f'{rover}': i for i, rover in enumerate(self.rovers)}

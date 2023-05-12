@@ -1,5 +1,5 @@
 trajectory_generator:
-  rovers: ['RR04']
+  rovers: ['RR06']
   dt: .02
   num_timesteps: 100
   goal_states: 
@@ -7,3 +7,4 @@ trajectory_generator:
     RR04: [0.0, 0.0, 0.0, 0.0]
   x_bounds: [[-10.0, 10], [-10.0, 10.0], [-1.0, 1.0], [-inf, inf]]
   u_bounds: [[-1.0, 1.0], [-0.785, 0.785]]
+  min_allowable_dist: 1.5
