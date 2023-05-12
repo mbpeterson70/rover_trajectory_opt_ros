@@ -66,6 +66,8 @@ class TrajectoryGeneratorNode():
                     self.pub_traj[rover].publish(self.xf_rover_states[rover])
                     continue
                 rover_state = RoverState()
+                rover_state.t = self.t
+                rover_state.tf = self.tf
                 rover_state.x = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][0,:-1])
                 rover_state.y = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][1,:-1])
                 rover_state.v = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:-1])
@@ -103,7 +105,7 @@ class TrajectoryGeneratorNode():
                 self.planner.setup_min_time_opt(x0, xf, tf_guess=10.0, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
                 self.planner.opti.subject_to(self.planner.tf > 1.)
                 x, u, tf = self.planner.solve_opt()
-                print('Executing trajectory...')
+                print('Executing trajectory...')               
                 self.x_traj = {f'{rover}': x[i] for i, rover in enumerate(self.rovers)}
                 self.u_traj = {f'{rover}': u[i] for i, rover in enumerate(self.rovers)}
                 self.tf = tf

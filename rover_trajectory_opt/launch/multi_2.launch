@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <node respawn="false" name="trajectory_generator_node" pkg="rover_trajectory_opt" type="trajectory_generator_node.py" output="screen">
+    <!-- Load parameters -->
+    <rosparam command="load" file="$(find rover_trajectory_opt)/cfg/multi_2.yaml" />
+  </node>
+  
+</launch>
