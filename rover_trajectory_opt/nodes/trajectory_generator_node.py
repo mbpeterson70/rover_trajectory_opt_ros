@@ -14,7 +14,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
 from casadi_trajectory_optimization.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL
-from casadi_trajectory_optimization.multi_agent_planner import MultiAgentPlanner
+from casadi_trajectory_optimization.multi_agent_optimization import MultiAgentOptimization
 
 class TrajectoryGeneratorNode():
     def __init__(self):
@@ -45,7 +45,7 @@ class TrajectoryGeneratorNode():
         
         # Internal variables
         self.states = {f'{rover}': np.nan*np.ones(4) for rover in self.rovers}
-        self.planner = MultiAgentPlanner(dynamics=DubinsDynamics(control=CONTROL_LIN_ACC_ANG_VEL), 
+        self.planner = MultiAgentOptimization(dynamics=DubinsDynamics(control=CONTROL_LIN_ACC_ANG_VEL), 
                                          num_agents=len(self.rovers), 
                                          num_timesteps=num_timesteps,
                                          min_allowable_dist=min_allowable_dist)

@@ -14,7 +14,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
 from casadi_trajectory_optimization.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL, CONTROL_LIN_VEL_ANG_VEL
-from casadi_trajectory_optimization.multi_agent_planner import MultiAgentPlanner
+from casadi_trajectory_optimization.multi_agent_optimization import MultiAgentOptimization
 
 class ModelPredictiveControlNode():
     def __init__(self):
@@ -39,7 +39,7 @@ class ModelPredictiveControlNode():
         # Internal variables
         self.state = np.nan*np.ones(4)
         self.ref_state = np.nan*np.ones(4)
-        self.planner = MultiAgentPlanner(dynamics=DubinsDynamics(control=CONTROL_LIN_VEL_ANG_VEL), 
+        self.planner = MultiAgentOptimization(dynamics=DubinsDynamics(control=CONTROL_LIN_VEL_ANG_VEL), 
                                          num_agents=1, 
                                          num_timesteps=self.mpc_num_timesteps)
         
