@@ -13,8 +13,8 @@ from rover_trajectory_msgs.msg import RoverState
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
-from casadi_trajectory_optimization.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL, CONTROL_LIN_VEL_ANG_VEL
-from casadi_trajectory_optimization.multi_agent_planner import MultiAgentPlanner
+from tomma.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL, CONTROL_LIN_VEL_ANG_VEL
+from tomma.multi_agent_optimization import MultiAgentOptimization
 
 class ModelPredictiveControlNode():
     def __init__(self):
@@ -39,7 +39,7 @@ class ModelPredictiveControlNode():
         # Internal variables
         self.state = np.nan*np.ones(4)
         self.ref_state = np.nan*np.ones(4)
-        self.planner = MultiAgentPlanner(dynamics=DubinsDynamics(control=CONTROL_LIN_VEL_ANG_VEL), 
+        self.planner = MultiAgentOptimization(dynamics=DubinsDynamics(control=CONTROL_LIN_VEL_ANG_VEL), 
                                          num_agents=1, 
                                          num_timesteps=self.mpc_num_timesteps)
         
@@ -60,7 +60,7 @@ class ModelPredictiveControlNode():
             # print(self.mpc_tf)
             self.planner.setup_mpc_opt(x0, xf, tf=self.mpc_tf, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
             # self.planner.opti.subject_to(self.planner.tf > 1.)
-            x, u, tf = self.planner.solve_opt()
+            x, u, t = self.planner.solve_opt()
             v_cmd = u[0][0,0]
             th_dot_cmd = u[0][1,0]
             cmd_vel = Twist()

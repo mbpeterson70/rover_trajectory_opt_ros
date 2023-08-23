@@ -13,8 +13,8 @@ from rover_trajectory_msgs.msg import RoverState
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
-from casadi_trajectory_optimization.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL
-from casadi_trajectory_optimization.multi_agent_planner import MultiAgentPlanner
+from tomma.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL
+from tomma.multi_agent_optimization import MultiAgentOptimization
 
 class TrajectoryGeneratorNode():
     def __init__(self):
@@ -45,7 +45,7 @@ class TrajectoryGeneratorNode():
         
         # Internal variables
         self.states = {f'{rover}': np.nan*np.ones(4) for rover in self.rovers}
-        self.planner = MultiAgentPlanner(dynamics=DubinsDynamics(control=CONTROL_LIN_ACC_ANG_VEL), 
+        self.planner = MultiAgentOptimization(dynamics=DubinsDynamics(control=CONTROL_LIN_ACC_ANG_VEL), 
                                          num_agents=len(self.rovers), 
                                          num_timesteps=num_timesteps,
                                          min_allowable_dist=min_allowable_dist)
@@ -70,10 +70,10 @@ class TrajectoryGeneratorNode():
                 rover_state = RoverState()
                 rover_state.t = self.t
                 rover_state.tf = self.tf
-                rover_state.x = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][0,:-1])
-                rover_state.y = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][1,:-1])
-                rover_state.v = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:-1])
-                rover_state.theta = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][3,:-1])
+                rover_state.x = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][0,:])
+                rover_state.y = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][1,:])
+                rover_state.v = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:])
+                rover_state.theta = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][3,:])
                 self.pub_traj[rover].publish(rover_state)
 
                 pose = PoseStamped()
@@ -106,12 +106,11 @@ class TrajectoryGeneratorNode():
                     xf[i,:] = self.goal_states[rover]
                 self.planner.setup_min_time_opt(x0, xf, tf_guess=10.0, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
                 self.planner.opti.subject_to(self.planner.tf > 1.)
-                x, u, tf = self.planner.solve_opt()
+                x, u, self.t_traj = self.planner.solve_opt()
                 print('Executing trajectory...')               
                 self.x_traj = {f'{rover}': x[i] for i, rover in enumerate(self.rovers)}
                 self.u_traj = {f'{rover}': u[i] for i, rover in enumerate(self.rovers)}
-                self.tf = tf
-                self.t_traj = np.linspace(0.0, self.tf, self.planner.N)
+                self.tf = self.t_traj[-1]
                 self.traj_planned = True
             else:
                 return # wait for all starting positions to be known
