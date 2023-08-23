@@ -2,4 +2,4 @@ trajectory_publisher:
   rovers: ['RR04']
   dt: .02
   trajectory_file: '/home/swarm/data/trajectories/single.json'
-  is_cycli: True
+  is_cyclic: True

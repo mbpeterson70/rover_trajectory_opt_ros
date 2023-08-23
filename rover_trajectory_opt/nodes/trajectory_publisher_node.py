@@ -77,7 +77,7 @@ class TrajectoryPublisherNode():
             rover_state = RoverState()
             rover_state.t = self.t
             rover_state.tf = self.tfs[self.seg_idx]
-            traj = self.trajectories[self.seg_idx][self.rover_idx[rover]](self.t)
+            traj = self.trajectories[self.seg_idx][self.rover_idx[rover]].data(self.t)
             rover_state.x = traj[0]
             rover_state.y = traj[1]
             rover_state.v = traj[2]
