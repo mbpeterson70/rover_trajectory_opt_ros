@@ -28,7 +28,7 @@ class ModelPredictiveControlNode():
         u_bounds = np.array(rospy.get_param(f"~mpc/u_bounds"))
         self.x_bounds = np.zeros(x_bounds.shape)
         self.u_bounds = np.zeros(u_bounds.shape)
-        self.u_diff_bounds = np.array([2., 2.])
+        self.u_diff_bounds = np.array([3., 3.])
         for i in range(self.x_bounds.shape[0]):
             for j in range(self.x_bounds.shape[1]):
                 self.x_bounds[i,j] = float(x_bounds[i,j])
@@ -52,16 +52,15 @@ class ModelPredictiveControlNode():
         self.timer = rospy.Timer(rospy.Duration(self.dt), self.loop_cb)
         self.last_ref_time = None
         self.last_pose_time = None
-        self.no_msg_time = .1
+        self.no_msg_time = .2
                 
     def loop_cb(self, event):
         if self.states_received() and self.ref_received():
-            if rospy.Time.now() - self.last_pose_time > self.no_msg_time or \
-                rospy.Time.now() - self.last_ref_time > self.no_msg_time:
+            if (rospy.Time.now() - self.last_pose_time).to_sec() > self.no_msg_time or \
+                (rospy.Time.now() - self.last_ref_time).to_sec() > self.no_msg_time:
                 cmd_vel = Twist()
                 cmd_vel.linear.x = 0.
                 cmd_vel.angular.z = 0.
-                print(v_cmd)
                 self.pub_auto_cmd.publish(cmd_vel)
             x0 = np.concatenate([self.state[0:2], [self.state[3]]]).reshape((1,3))
             xf = np.concatenate([self.ref_state[0:2], [self.ref_state[3]]]).reshape((1,3))
