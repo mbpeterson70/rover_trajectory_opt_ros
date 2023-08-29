@@ -52,6 +52,7 @@ class ModelPredictiveControlNode():
         self.timer = rospy.Timer(rospy.Duration(self.dt), self.loop_cb)
         self.last_ref_time = None
         self.last_pose_time = None
+        self.no_msg_time = .1
                 
     def loop_cb(self, event):
         if self.states_received() and self.ref_received():
