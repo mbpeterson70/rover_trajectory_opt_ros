@@ -29,6 +29,7 @@ class ModelPredictiveControlNode():
         self.x_bounds = np.zeros(x_bounds.shape)
         self.u_bounds = np.zeros(u_bounds.shape)
         self.u_diff_bounds = np.array([3., 3.])
+        self.R = np.diag([.05, .05])
         for i in range(self.x_bounds.shape[0]):
             for j in range(self.x_bounds.shape[1]):
                 self.x_bounds[i,j] = float(x_bounds[i,j])
@@ -38,7 +39,7 @@ class ModelPredictiveControlNode():
         # self.publish_control = rospy.get_param("~trajectory_publisher/publish_control")
         
         # Internal variables
-        self.state = np.nan*np.ones(4)
+        self.state = np.nan*np.ones(5)
         self.ref_state = np.nan*np.ones(4)
         self.planner = MultiAgentOptimization(dynamics=DubinsDynamics(control=CONTROL_LIN_VEL_ANG_VEL), 
                                          num_agents=1, 
@@ -69,10 +70,10 @@ class ModelPredictiveControlNode():
             # print(self.state.reshape((1, 4)))
             # print(xf)
             # print(self.mpc_tf)
-            self.planner.setup_mpc_opt(x0, xf, tf=self.mpc_tf, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
+            self.planner.setup_mpc_opt(x0, xf, R=self.R, tf=self.mpc_tf, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
             self.planner.add_u_diff_bounds(self.u_diff_bounds)
             # constrain initial forward velocity
-            self.planner.add_u0_constraint(np.array([self.state[2], np.nan]))
+            self.planner.add_u0_constraint(np.array([self.state[2], self.state[4]]))
             # self.planner.opti.subject_to(self.planner.tf > 1.)
             try:
                 x, u, t = self.planner.solve_opt()
@@ -84,7 +85,7 @@ class ModelPredictiveControlNode():
                 cmd_vel = Twist()
                 cmd_vel.linear.x = v_cmd
                 cmd_vel.angular.z = th_dot_cmd
-                print(v_cmd)
+                # print(v_cmd)
                 self.pub_auto_cmd.publish(cmd_vel)
             except:
                 print('planner failed')
@@ -104,11 +105,18 @@ class ModelPredictiveControlNode():
         if np.isnan(theta):
             return
         self.state[2] = twist_stamped.twist.linear.x*np.cos(theta) + twist_stamped.twist.linear.y*np.sin(theta)
+        self.state[4] = twist_stamped.twist.angular.z
         # TODO: did I get that right?
 
     def ref_cb(self, rover_state):
         self.last_ref_time = rospy.Time.now()
-        self.ref_state = np.array([rover_state.x, rover_state.y, rover_state.v, rover_state.theta])
+        theta_ref = rover_state.theta
+        # TODO: don't use euler angles in trajectory optimization
+        if self.state[3] - theta_ref > np.pi:
+            theta_ref += 2*np.pi
+        elif theta_ref - self.state[3] > np.pi:
+            theta_ref -= 2*np.pi
+        self.ref_state = np.array([rover_state.x, rover_state.y, rover_state.v, theta_ref])
         
     def states_received(self):
         print(self.state)
