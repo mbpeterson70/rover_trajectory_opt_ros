@@ -28,6 +28,7 @@ class ModelPredictiveControlNode():
         u_bounds = np.array(rospy.get_param(f"~mpc/u_bounds"))
         self.x_bounds = np.zeros(x_bounds.shape)
         self.u_bounds = np.zeros(u_bounds.shape)
+        self.u_diff_bounds = np.array([2., 2.])
         for i in range(self.x_bounds.shape[0]):
             for j in range(self.x_bounds.shape[1]):
                 self.x_bounds[i,j] = float(x_bounds[i,j])
@@ -59,10 +60,16 @@ class ModelPredictiveControlNode():
             # print(xf)
             # print(self.mpc_tf)
             self.planner.setup_mpc_opt(x0, xf, tf=self.mpc_tf, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
+            self.planner.add_u_diff_bounds(self.u_diff_bounds)
+            # constrain initial forward velocity
+            self.planner.add_u0_constraint(np.array([self.state[2], np.nan]))
             # self.planner.opti.subject_to(self.planner.tf > 1.)
             x, u, t = self.planner.solve_opt()
-            v_cmd = u[0][0,0]
-            th_dot_cmd = u[0][1,0]
+            
+            # use second command since first is constrained to be current 
+            v_cmd = u[0][0,1]
+            # TODO: [0,1] ? since theta_dot init not constrained
+            th_dot_cmd = u[0][1,1]
             cmd_vel = Twist()
             cmd_vel.linear.x = v_cmd
             cmd_vel.angular.z = th_dot_cmd
