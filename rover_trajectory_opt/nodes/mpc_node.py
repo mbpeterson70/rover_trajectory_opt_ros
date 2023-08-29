@@ -62,6 +62,7 @@ class ModelPredictiveControlNode():
                 cmd_vel.linear.x = 0.
                 cmd_vel.angular.z = 0.
                 self.pub_auto_cmd.publish(cmd_vel)
+                return
             x0 = np.concatenate([self.state[0:2], [self.state[3]]]).reshape((1,3))
             xf = np.concatenate([self.ref_state[0:2], [self.ref_state[3]]]).reshape((1,3))
             # print(self.states_received())
