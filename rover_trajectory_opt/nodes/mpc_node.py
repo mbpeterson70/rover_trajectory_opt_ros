@@ -50,9 +50,18 @@ class ModelPredictiveControlNode():
         self.sub_ref = rospy.Subscriber(f"trajectory", RoverState, self.ref_cb, queue_size=1)
         self.pub_auto_cmd = rospy.Publisher("cmd_vel_auto", Twist, queue_size=1)
         self.timer = rospy.Timer(rospy.Duration(self.dt), self.loop_cb)
+        self.last_ref_time = None
+        self.last_pose_time = None
                 
     def loop_cb(self, event):
         if self.states_received() and self.ref_received():
+            if rospy.Time.now() - self.last_pose_time > self.no_msg_time or \
+                rospy.Time.now() - self.last_ref_time > self.no_msg_time:
+                cmd_vel = Twist()
+                cmd_vel.linear.x = 0.
+                cmd_vel.angular.z = 0.
+                print(v_cmd)
+                self.pub_auto_cmd.publish(cmd_vel)
             x0 = np.concatenate([self.state[0:2], [self.state[3]]]).reshape((1,3))
             xf = np.concatenate([self.ref_state[0:2], [self.ref_state[3]]]).reshape((1,3))
             # print(self.states_received())
@@ -64,21 +73,25 @@ class ModelPredictiveControlNode():
             # constrain initial forward velocity
             self.planner.add_u0_constraint(np.array([self.state[2], np.nan]))
             # self.planner.opti.subject_to(self.planner.tf > 1.)
-            x, u, t = self.planner.solve_opt()
+            try:
+                x, u, t = self.planner.solve_opt()
             
-            # use second command since first is constrained to be current 
-            v_cmd = u[0][0,1]
-            # TODO: [0,1] ? since theta_dot init not constrained
-            th_dot_cmd = u[0][1,1]
-            cmd_vel = Twist()
-            cmd_vel.linear.x = v_cmd
-            cmd_vel.angular.z = th_dot_cmd
-            print(v_cmd)
-            self.pub_auto_cmd.publish(cmd_vel)
+                # use second command since first is constrained to be current 
+                v_cmd = u[0][0,1]
+                # TODO: [0,1] ? since theta_dot init not constrained
+                th_dot_cmd = u[0][1,1]
+                cmd_vel = Twist()
+                cmd_vel.linear.x = v_cmd
+                cmd_vel.angular.z = th_dot_cmd
+                print(v_cmd)
+                self.pub_auto_cmd.publish(cmd_vel)
+            except:
+                print('planner failed')
         else:
             self.pub_auto_cmd.publish(Twist())
         
     def pose_cb(self, pose_stamped):
+        self.last_pose_time = rospy.Time.now()
         self.state[0] = pose_stamped.pose.position.x
         self.state[1] = pose_stamped.pose.position.y
         quat = pose_stamped.pose.orientation
@@ -93,6 +106,7 @@ class ModelPredictiveControlNode():
         # TODO: did I get that right?
 
     def ref_cb(self, rover_state):
+        self.last_ref_time = rospy.Time.now()
         self.ref_state = np.array([rover_state.x, rover_state.y, rover_state.v, rover_state.theta])
         
     def states_received(self):
