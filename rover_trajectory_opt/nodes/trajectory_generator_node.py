@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
+#
+# This node generates and publishes a trajectory for rovers 
+# to navigate to a desired final pose
 
-"""
-This node generates and publishes a trajectory for rovers 
-to navigate to a desired final pose
-"""
-
+# ros imports
 import rospy
 from geometry_msgs.msg import PoseStamped, TwistStamped, Twist
 from std_srvs.srv import Trigger
 from rover_trajectory_msgs.msg import RoverState
 
+# python imports
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
+# trajectory optimization imports: https://github.com/mbpeterson70/tomma/
 from tomma.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL
 from tomma.multi_agent_optimization import MultiAgentOptimization
 
@@ -21,19 +22,23 @@ class TrajectoryGeneratorNode():
         self.node_name = rospy.get_name()
         
         # Params
-        self.rovers = rospy.get_param("~trajectory_generator/rovers")
-        self.dt = rospy.get_param("~trajectory_generator/dt")
-        num_timesteps = rospy.get_param("~trajectory_generator/num_timesteps")
-        min_allowable_dist = rospy.get_param("~trajectory_generator/min_allowable_dist")
-        self.goal_states = {f'{rover}': np.array([rospy.get_param(f"~trajectory_generator/goal_states/{rover}")]) for rover in self.rovers}
+        self.rovers = rospy.get_param("~trajectory_generator/rovers") # rover names
+        self.dt = rospy.get_param("~trajectory_generator/dt") # how often to publish trajectory
+        num_timesteps = rospy.get_param( # number of timesteps to use in trajectory optimization
+            "~trajectory_generator/num_timesteps") 
+        min_allowable_dist = rospy.get_param( # allowable distance between rovers
+            "~trajectory_generator/min_allowable_dist")
+        self.goal_states = {f'{rover}': # dictionary mapping rover names to goal states
+            np.array([rospy.get_param(f"~trajectory_generator/goal_states/{rover}")]) for rover in self.rovers}
         self.xf_rover_states = dict()
         for rover, xf in self.goal_states.items():
             xf_rover_state = RoverState()
             xf_rover_state.x, xf_rover_state.y, xf_rover_state.v, xf_rover_state.theta = xf.reshape(-1).tolist()
             self.xf_rover_states[rover] = xf_rover_state
-        x_bounds = np.array(rospy.get_param(f"~trajectory_generator/x_bounds"))
-        u_bounds = np.array(rospy.get_param(f"~trajectory_generator/u_bounds"))
-        self.x_bounds = np.zeros(x_bounds.shape)
+        x_bounds = np.array(rospy.get_param(f"~trajectory_generator/x_bounds")) # state boundaries
+        u_bounds = np.array(rospy.get_param(f"~trajectory_generator/u_bounds")) # input boundaries
+        # reformatting boundaries for input into tomma
+        self.x_bounds = np.zeros(x_bounds.shape) 
         self.u_bounds = np.zeros(u_bounds.shape)
         for i in range(self.x_bounds.shape[0]):
             for j in range(self.x_bounds.shape[1]):
@@ -41,7 +46,6 @@ class TrajectoryGeneratorNode():
         for i in range(self.u_bounds.shape[0]):
             for j in range(self.u_bounds.shape[1]):
                 self.u_bounds[i,j] = float(u_bounds[i,j])
-        # self.publish_control = rospy.get_param("~trajectory_publisher/publish_control")
         
         # Internal variables
         self.states = {f'{rover}': np.nan*np.ones(4) for rover in self.rovers}
@@ -54,19 +58,35 @@ class TrajectoryGeneratorNode():
         self.rover_idx = {f'{rover}': i for i, rover in enumerate(self.rovers)}
         
         # Pub & Sub
-        self.sub_pose = [rospy.Subscriber(f"{rover}/world", PoseStamped, self.pose_cb, queue_size=1, callback_args=rover) for rover in self.rovers]
-        self.sub_twist = [rospy.Subscriber(f"{rover}/mocap/twist", TwistStamped, self.twist_cb, queue_size=1, callback_args=rover) for rover in self.rovers]
-        self.pub_traj = {f'{rover}': rospy.Publisher(f"{rover}/trajectory", RoverState, queue_size=1) for rover in self.rovers}
-        self.pub_traj_pose = {f'{rover}': rospy.Publisher(f"{rover}/trajectory_pose", PoseStamped, queue_size=1) for rover in self.rovers}
-        # self.pub_auto_cmd = {f'{rover}': rospy.Publisher(f"{rover}/cmd_vel_auto", Twist, queue_size=1) for rover in self.rovers}
+        self.sub_pose = [ # pose subscriber for each rover, passes the rover identifier into callback
+            rospy.Subscriber(f"{rover}/world", PoseStamped, self.pose_cb, queue_size=1, callback_args=rover)
+        for rover in self.rovers]
+        self.sub_twist = [ # twist subscriber for each rover
+            rospy.Subscriber(f"{rover}/mocap/twist", TwistStamped, self.twist_cb, queue_size=1, callback_args=rover) 
+        for rover in self.rovers]
+        self.pub_traj = { # dictionary of trajectory publishers for each rover
+            f'{rover}': rospy.Publisher(f"{rover}/trajectory", RoverState, queue_size=1) 
+        for rover in self.rovers}
+        self.pub_traj_pose = { # dictionary of trajectory pose publishers for each rover (for visualization)
+            f'{rover}': rospy.Publisher(f"{rover}/trajectory_pose", PoseStamped, queue_size=1) for rover in self.rovers
+        }
         self.timer = rospy.Timer(rospy.Duration(self.dt), self.loop_cb)
                 
     def loop_cb(self, event):
+        """
+        Loops every self.dt seconds to publish trajectory to listening robots
+
+        Args:
+            event (rospy.TimerEvent): not used
+        """
+        # if trajectory has been planned, publish trajectory
         if self.traj_planned:
-            for rover in self.rovers:
-                if self.t > self.tf:
+            for rover in self.rovers: # loop through each rover
+                if self.t > self.tf: # continue to publish final state if trajectory time has finished
                     self.pub_traj[rover].publish(self.xf_rover_states[rover])
                     continue
+                
+                # setup and publish RoverState msg
                 rover_state = RoverState()
                 rover_state.t = self.t
                 rover_state.tf = self.tf
@@ -76,6 +96,7 @@ class TrajectoryGeneratorNode():
                 rover_state.theta = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][3,:])
                 self.pub_traj[rover].publish(rover_state)
 
+                # setup and publish rover trajectory pose for visualization (rviz)
                 pose = PoseStamped()
                 pose.pose.position.x = rover_state.x
                 pose.pose.position.y = rover_state.y
@@ -84,18 +105,10 @@ class TrajectoryGeneratorNode():
                 pose.header.frame_id = "world"
                 self.pub_traj_pose[rover].publish(pose)
 
-                # if self.t > self.tf:
-                #     self.pub_auto_cmd[rover].publish(Twist())
-                #     continue
-                # v_cmd = np.interp(self.t, xp=self.t_traj, fp=self.x_traj[rover][2,:-1])
-                # th_dot_cmd = np.interp(self.t, xp=self.t_traj, fp=self.u_traj[rover][1,:])
-                # cmd_vel = Twist()
-                # cmd_vel.linear.x = v_cmd
-                # cmd_vel.angular.z = th_dot_cmd
-                # self.pub_auto_cmd[rover].publish(cmd_vel)
             self.t += self.dt
             return
         else:
+            # if all states have been received, plan trajectory, otherwise, continue waiting
             if self.all_states_received():
                 # plan trajectory
                 print('Planning trajectory...')
@@ -116,6 +129,13 @@ class TrajectoryGeneratorNode():
                 return # wait for all starting positions to be known
         
     def pose_cb(self, pose_stamped, rover):
+        """
+        Stores the most recent pose (with theta wrapping)
+
+        Args:
+            pose_stamped (PoseStamped): rover pose
+            rover (any): rover ID
+        """
         self.states[rover][0] = pose_stamped.pose.position.x
         self.states[rover][1] = pose_stamped.pose.position.y
         quat = pose_stamped.pose.orientation
@@ -123,6 +143,13 @@ class TrajectoryGeneratorNode():
         self.states[rover][3] = -((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
         
     def twist_cb(self, twist_stamped, rover):
+        """
+        Stores the most recent linear/angular velcoties
+
+        Args:
+            twist_stamped (TwistStamped): rover twist
+            rover (any): rover ID
+        """
         theta = self.states[rover][3]
         if np.isnan(theta):
             return
@@ -130,6 +157,9 @@ class TrajectoryGeneratorNode():
         # TODO: did I get that right?
         
     def all_states_received(self):
+        """
+        Check whether each rover's state has been recieved
+        """
         for rover in self.rovers:
             if np.any(np.isnan(self.states[rover])):
                 return False
