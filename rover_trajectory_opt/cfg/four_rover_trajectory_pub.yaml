@@ -1,0 +1,5 @@
+trajectory_publisher:
+  rovers: ['RR01', 'RR04', 'RR06', 'RR08']
+  dt: .02
+  trajectory_file: '/home/swarm/data/trajectories/four_rover.json'
+  is_cyclic: True
