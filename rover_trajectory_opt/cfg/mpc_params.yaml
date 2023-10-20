@@ -1,6 +1,6 @@
 mpc:
-  num_timesteps: 5
-  tf: .5
+  num_timesteps: 10
+  tf: 1.0
   dt: 0.1
   x_bounds: [[-10.0, 10], [-10.0, 10.0], [-inf, inf]]
   u_bounds: [[-1.0, 1.0], [-0.785, 0.785]]

@@ -12,6 +12,7 @@ from rover_trajectory_msgs.msg import RoverState
 
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
+from scipy.interpolate import interp1d
 
 from tomma.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL, CONTROL_LIN_VEL_ANG_VEL
 from tomma.multi_agent_optimization import MultiAgentOptimization
@@ -40,7 +41,8 @@ class ModelPredictiveControlNode():
         
         # Internal variables
         self.state = np.nan*np.ones(5)
-        self.ref_state = np.nan*np.ones(4)
+        self.ref_times = []
+        self.ref_state = []
         self.planner = MultiAgentOptimization(dynamics=DubinsDynamics(control=CONTROL_LIN_VEL_ANG_VEL), 
                                          num_agents=1, 
                                          num_timesteps=self.mpc_num_timesteps)
@@ -65,12 +67,13 @@ class ModelPredictiveControlNode():
                 self.pub_auto_cmd.publish(cmd_vel)
                 return
             x0 = np.concatenate([self.state[0:2], [self.state[3]]]).reshape((1,3))
-            xf = np.concatenate([self.ref_state[0:2], [self.ref_state[3]]]).reshape((1,3))
+            xf = np.concatenate([self.ref_state[-1][0:2], [self.ref_state[-1][3]]]).reshape((1,3))
+            waypoints = self._get_waypoints()
             # print(self.states_received())
             # print(self.state.reshape((1, 4)))
             # print(xf)
             # print(self.mpc_tf)
-            self.planner.setup_mpc_opt(x0, xf, R=self.R, tf=self.mpc_tf, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
+            self.planner.setup_mpc_opt(x0, xf, R=self.R, tf=self.mpc_tf, waypoints=waypoints, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
             self.planner.add_u_diff_bounds(self.u_diff_bounds)
             # constrain initial forward velocity
             self.planner.add_u0_constraint(np.array([self.state[2], self.state[4]]))
@@ -116,7 +119,8 @@ class ModelPredictiveControlNode():
             theta_ref += 2*np.pi
         elif theta_ref - self.state[3] > np.pi:
             theta_ref -= 2*np.pi
-        self.ref_state = np.array([rover_state.x, rover_state.y, rover_state.v, theta_ref])
+        self.ref_state.append(np.array([rover_state.x, rover_state.y, rover_state.v, theta_ref]))
+        self.ref_times.append(rover_state.t)
         
     def states_received(self):
         print(self.state)
@@ -124,7 +128,26 @@ class ModelPredictiveControlNode():
         
     def ref_received(self):
         print(self.ref_state)
-        return not np.any(np.isnan(self.ref_state))
+        # make sure we have enough reference times to make up a trajectory
+        return len(self.ref_times) > 0 and \
+            self.ref_times[-1] - self.ref_times[0] > self.mpc_tf
+            
+    def _get_waypoints(self):
+        tf = self.ref_times[-1]
+        while self.ref_times[1] < tf - self.mpc_tf:
+            self.ref_times = self.ref_times[1:]
+            self.ref_state = self.ref_state[1:]
+        
+        t0 = tf - self.mpc_tf
+        waypoints = {}
+
+        trajectory_interp = interp1d(self.ref_times, self.ref_state, axis=0)
+        for i in range(1, self.mpc_num_timesteps):
+            waypoint = trajectory_interp(t0 + i*self.mpc_tf/self.mpc_num_timesteps)
+            waypoints[i] = np.concatenate([waypoint[0:2], [waypoint[3]]]).reshape((1,3))
+            
+        return waypoints
+        
             
     
 if __name__ == '__main__':
