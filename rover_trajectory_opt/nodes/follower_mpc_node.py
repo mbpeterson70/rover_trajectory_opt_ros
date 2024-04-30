@@ -120,9 +120,9 @@ class ModelPredictiveControlNode():
         self.last_ref_time = rospy.Time.now()
         theta_ref = rover_state.theta
         # TODO: don't use euler angles in trajectory optimization
-        if self.state[3] - theta_ref > np.pi:
+        while self.state[3] - theta_ref > np.pi:
             theta_ref += 2*np.pi
-        elif theta_ref - self.state[3] > np.pi:
+        while theta_ref - self.state[3] > np.pi:
             theta_ref -= 2*np.pi
         ref_state = np.array([rover_state.x, rover_state.y, rover_state.v, theta_ref])
         if self.ref_states.times is None:
