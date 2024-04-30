@@ -17,6 +17,7 @@ from tomma.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL, CONTR
 from tomma.multi_agent_optimization import MultiAgentOptimization
 
 from robot_utils.robot_data import ArrayData
+from robot_utils.exceptions import NoDataNearTimeException
 
 class ModelPredictiveControlNode():
     def __init__(self):
@@ -73,7 +74,10 @@ class ModelPredictiveControlNode():
             Q_waypoints = {}
             for i in range(self.mpc_num_timesteps):
                 t = self.ref_states.times[-1] - self.mpc_tf + i*self.mpc_num_timesteps/self.mpc_tf
-                wp = self.ref_states.data(t)
+                try:
+                    wp = self.ref_states.data(t)
+                except NoDataNearTimeException as ex:
+                    continue
                 waypoints[i] = np.concatenate([wp[0:2], [wp[3]]]).reshape((1,3))
                 Q_waypoints[i] = np.eye(3)*i
             Qf = np.eye(3)*self.mpc_num_timesteps
@@ -137,8 +141,11 @@ class ModelPredictiveControlNode():
         return not np.any(np.isnan(self.state))
         
     def ref_received(self):
-        print(self.ref_state)
-        return not np.any(np.isnan(self.ref_state))
+        if self.ref_states._data is not None:
+            print(self.ref_states._data[-1])
+        else:
+            print(None)
+        return self.ref_states._data is not None
             
     
 if __name__ == '__main__':
