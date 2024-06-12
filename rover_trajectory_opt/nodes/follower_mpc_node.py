@@ -56,7 +56,7 @@ class ModelPredictiveControlNode():
         self.timer = rospy.Timer(rospy.Duration(self.dt), self.loop_cb)
         self.last_ref_time = None
         self.last_pose_time = None
-        self.no_msg_time = .2
+        self.no_msg_time = .5
                 
     def loop_cb(self, event):
         if self.states_received() and self.ref_received():
@@ -67,11 +67,18 @@ class ModelPredictiveControlNode():
                 cmd_vel.angular.z = 0.
                 self.pub_auto_cmd.publish(cmd_vel)
                 return
+            # ref_state is in the form [x, y, v, theta]
+            # x: x, y, theta
             x0 = np.concatenate([self.state[0:2], [self.state[3]]]).reshape((1,3))
             xf = np.concatenate([self.ref_states._data[-1][0:2], [self.ref_states._data[-1][3]]]).reshape((1,3))
             
             waypoints = {}
             Q_waypoints = {}
+
+            # TODO: deleting the following if statement w/o testing...
+            # seems like it was supposed to be for 
+            # making sure the velocity was high enough, but xf.item(1) is y?
+            # if xf.item(1) > .1:
             for i in range(self.mpc_num_timesteps):
                 t = self.ref_states.times[-1] - self.mpc_tf + i*self.mpc_num_timesteps/self.mpc_tf
                 try:
@@ -129,6 +136,7 @@ class ModelPredictiveControlNode():
         while theta_ref - self.state[3] > np.pi:
             theta_ref -= 2*np.pi
         ref_state = np.array([rover_state.x, rover_state.y, rover_state.v, theta_ref])
+        # ref_state is in the form [x, y, v, theta]
         if self.ref_states.times is None:
             self.ref_states.times = np.array([rover_state.t])
             self.ref_states._data = ref_state.reshape((1,4))
