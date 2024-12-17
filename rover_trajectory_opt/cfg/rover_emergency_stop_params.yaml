@@ -1,7 +1,0 @@
-dt: 0.01
-xmin: -4.5
-xmax: 5.0
-ymin: -3.5
-ymax: 4.5
-ugv_radius: 1.0 
-ugvs: ["RR01", "RR04", "RR05", "RR06", "RR08"]

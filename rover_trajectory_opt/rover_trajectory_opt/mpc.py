@@ -5,63 +5,80 @@ This node generates and publishes a trajectory for rovers
 to navigate to a desired final pose
 """
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, TwistStamped, Twist
-from std_srvs.srv import Trigger
+from nav_msgs.msg import Odometry
 from rover_trajectory_msgs.msg import RoverState
 
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
-from tomma.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL, CONTROL_LIN_VEL_ANG_VEL
+from tomma.dubins_dynamics import DubinsDynamics, CONTROL_LIN_VEL_ANG_VEL
 from tomma.multi_agent_optimization import MultiAgentOptimization
 
-from robot_utils.robot_data import ArrayData
-from robot_utils.exceptions import NoDataNearTimeException
+from robotdatapy.data import ArrayData
+from robotdatapy.exceptions import NoDataNearTimeException
 
-class ModelPredictiveControlNode():
+
+class ModelPredictiveControlNode(Node):
     def __init__(self):
-        self.node_name = rospy.get_name()
-        
+        super().__init__('mpc_node')
+
         # Params
-        self.dt = rospy.get_param("~mpc/dt")
-        self.mpc_num_timesteps = rospy.get_param("~mpc/num_timesteps")
-        self.mpc_tf = rospy.get_param("~mpc/tf")
-        x_bounds = np.array(rospy.get_param(f"~mpc/x_bounds"))
-        u_bounds = np.array(rospy.get_param(f"~mpc/u_bounds"))
+        self.declare_parameter("mpc/dt", 0.2)
+        self.declare_parameter("mpc/num_timesteps", 5)
+        self.declare_parameter("mpc/tf", 1.0)
+        # TODO: make param
+        # self.declare_parameter("mpc/x_bounds", [-10.0, 10, -10.0, 10.0, -float('inf'), float('inf')])
+        # self.declare_parameter("mpc/u_bounds", [-1.0, 1.0, -1.5, 1.5])
+
+        self.dt = self.get_parameter("mpc/dt").value
+        self.mpc_num_timesteps = self.get_parameter("mpc/num_timesteps").value
+        self.mpc_tf = self.get_parameter("mpc/tf").value
+
+        # x_bounds = np.array(self.get_parameter("mpc/x_bounds").value).reshape((3,2))
+        # u_bounds = np.array(self.get_parameter("mpc/u_bounds").value).reshape((2,2))
+        x_bounds = np.array([[-np.inf, np.inf], [-np.inf, np.inf], [-np.inf, np.inf]])
+        u_bounds = np.array([[-1.0, 1.0], [-1.5, 1.5]])
         self.x_bounds = np.zeros(x_bounds.shape)
         self.u_bounds = np.zeros(u_bounds.shape)
-        self.u_diff_bounds = np.array([3., 3.])
-        self.R = np.diag([.05, .05])
+        self.u_diff_bounds = np.array([3.0, 3.0])
+        self.R = np.diag([0.05, 0.05])
+
         for i in range(self.x_bounds.shape[0]):
             for j in range(self.x_bounds.shape[1]):
-                self.x_bounds[i,j] = float(x_bounds[i,j])
+                self.x_bounds[i, j] = float(x_bounds[i, j])
         for i in range(self.u_bounds.shape[0]):
             for j in range(self.u_bounds.shape[1]):
-                self.u_bounds[i,j] = float(u_bounds[i,j])
-        # self.publish_control = rospy.get_param("~trajectory_publisher/publish_control")
-        
+                self.u_bounds[i, j] = float(u_bounds[i, j])
+
         # Internal variables
-        self.state = np.nan*np.ones(5)
+        self.state = np.nan * np.ones(5)
         self.ref_states = ArrayData(time_array=None, data_array=None, interp=True, time_tol=1.0)
-        self.planner = MultiAgentOptimization(dynamics=DubinsDynamics(control=CONTROL_LIN_VEL_ANG_VEL), 
-                                         num_agents=1, 
-                                         num_timesteps=self.mpc_num_timesteps)
-        
+        self.planner = MultiAgentOptimization(
+            dynamics=DubinsDynamics(control=CONTROL_LIN_VEL_ANG_VEL),
+            num_agents=1,
+            num_timesteps=self.mpc_num_timesteps,
+        )
+
         # Pub & Sub
-        self.sub_pose = rospy.Subscriber(f"world", PoseStamped, self.pose_cb, queue_size=1)
-        self.sub_twist = rospy.Subscriber(f"mocap/twist", TwistStamped, self.twist_cb, queue_size=1)
-        self.sub_ref = rospy.Subscriber(f"trajectory", RoverState, self.ref_cb, queue_size=1)
-        self.pub_auto_cmd = rospy.Publisher("cmd_vel_auto", Twist, queue_size=1)
-        self.timer = rospy.Timer(rospy.Duration(self.dt), self.loop_cb)
+        # self.sub_pose = self.create_subscription(PoseStamped, "world", self.pose_cb, 10)
+        # self.sub_twist = self.create_subscription(TwistStamped, "mocap/twist", self.twist_cb, 10)
+        self.sub_twist = self.create_subscription(TwistStamped, "odom", self.odom_cb, 10)
+        self.sub_ref = self.create_subscription(RoverState, "trajectory", self.ref_cb, 10)
+        self.pub_auto_cmd = self.create_publisher(Twist, "cmd_vel_auto", 10)
+
+        # Timer
+        self.timer = self.create_timer(self.dt, self.loop_cb)
         self.last_ref_time = None
         self.last_pose_time = None
-        self.no_msg_time = .5
+        self.no_msg_time = 0.5
                 
-    def loop_cb(self, event):
+    def loop_cb(self):
         if self.states_received() and self.ref_received():
-            if (rospy.Time.now() - self.last_pose_time).to_sec() > self.no_msg_time or \
-                (rospy.Time.now() - self.last_ref_time).to_sec() > self.no_msg_time:
+            if (self.get_clock().now() - self.last_pose_time).to_sec() > self.no_msg_time or \
+                (self.get_clock().now() - self.last_ref_time).to_sec() > self.no_msg_time:
                 cmd_vel = Twist()
                 cmd_vel.linear.x = 0.
                 cmd_vel.angular.z = 0.
@@ -89,7 +106,17 @@ class ModelPredictiveControlNode():
                 Q_waypoints[i] = np.eye(3)*i
             Qf = np.eye(3)*self.mpc_num_timesteps
             
-            self.planner.setup_mpc_opt(x0, xf, R=self.R, tf=self.mpc_tf, waypoints=waypoints, Q_waypoints=Q_waypoints, Qf=Qf, x_bounds=self.x_bounds, u_bounds=self.u_bounds)
+            self.planner.setup_mpc_opt(
+                x0, 
+                xf, 
+                R=self.R, 
+                tf=self.mpc_tf, 
+                waypoints=waypoints, 
+                Q_waypoints=Q_waypoints, 
+                Qf=Qf, 
+                x_bounds=self.x_bounds, 
+                u_bounds=self.u_bounds
+            )
             self.planner.add_u_diff_bounds(self.u_diff_bounds)
             # constrain initial forward velocity
             self.planner.add_u0_constraint(np.array([self.state[2], self.state[4]]))
@@ -106,29 +133,45 @@ class ModelPredictiveControlNode():
                 cmd_vel.angular.z = th_dot_cmd
                 # print(v_cmd)
                 self.pub_auto_cmd.publish(cmd_vel)
-            except:
-                print('planner failed')
+            except Exception:
+                self.get_logger().error("Planner failed")
         else:
             self.pub_auto_cmd.publish(Twist())
         
-    def pose_cb(self, pose_stamped):
-        self.last_pose_time = rospy.Time.now()
-        self.state[0] = pose_stamped.pose.position.x
-        self.state[1] = pose_stamped.pose.position.y
-        quat = pose_stamped.pose.orientation
-        theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.z, quat.w]).as_euler('xyz')[2]
-        self.state[3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
+    # def pose_cb(self, pose_stamped):
+    #     self.last_pose_time = self.get_clock().now()
+    #     self.state[0] = pose_stamped.pose.position.x
+    #     self.state[1] = pose_stamped.pose.position.y
+    #     quat = pose_stamped.pose.orientation
+    #     theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.z, quat.w]).as_euler('xyz')[2]
+    #     self.state[3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
         
-    def twist_cb(self, twist_stamped):
+    # def twist_cb(self, twist_stamped):
+    #     theta = self.state[3]
+    #     if np.isnan(theta):
+    #         return
+    #     self.state[2] = twist_stamped.twist.linear.x*np.cos(theta) + twist_stamped.twist.linear.y*np.sin(theta)
+    #     self.state[4] = twist_stamped.twist.angular.z
+    #     # TODO: did I get that right?
+
+    def odom_cb(self, odom_msg: Odometry):
         theta = self.state[3]
         if np.isnan(theta):
             return
-        self.state[2] = twist_stamped.twist.linear.x*np.cos(theta) + twist_stamped.twist.linear.y*np.sin(theta)
-        self.state[4] = twist_stamped.twist.angular.z
+        
+        self.last_pose_time = self.get_clock().now()
+        self.state[0] = odom_msg.pose.pose.position.x
+        self.state[1] = odom_msg.pose.pose.position.y
+        quat = odom_msg.pose.pose.orientation
+        theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.z, quat.w]).as_euler('xyz')[2]
+        self.state[3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
+        
+        self.state[2] = odom_msg.twist.twist.linear.x*np.cos(theta) + odom_msg.twist.twist.linear.y*np.sin(theta)
+        self.state[4] = odom_msg.twist.twist.angular.z
         # TODO: did I get that right?
 
     def ref_cb(self, rover_state):
-        self.last_ref_time = rospy.Time.now()
+        self.last_ref_time = self.get_clock().now()
         theta_ref = rover_state.theta
         # TODO: don't use euler angles in trajectory optimization
         while self.state[3] - theta_ref > np.pi:
@@ -156,7 +199,13 @@ class ModelPredictiveControlNode():
         return self.ref_states._data is not None
             
     
-if __name__ == '__main__':
-    rospy.init_node('mpc_node', anonymous=False)
+def main(args=None):
+    rclpy.init(args=args)
     node = ModelPredictiveControlNode()
-    rospy.spin()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
