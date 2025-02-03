@@ -16,8 +16,8 @@ from scipy.spatial.transform import Rotation as Rot
 from tomma.dubins_dynamics import DubinsDynamics, CONTROL_LIN_ACC_ANG_VEL, CONTROL_LIN_VEL_ANG_VEL
 from tomma.multi_agent_optimization import MultiAgentOptimization
 
-from robot_utils.robot_data import ArrayData
-from robot_utils.exceptions import NoDataNearTimeException
+from robotdatapy.data import ArrayData
+from robotdatapy.exceptions import NoDataNearTimeException
 
 class ModelPredictiveControlNode():
     def __init__(self):
