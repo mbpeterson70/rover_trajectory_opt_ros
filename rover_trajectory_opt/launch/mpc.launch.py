@@ -20,6 +20,7 @@ def generate_launch_description():
     # Create namespace for the vehicle
     # namespace = [LaunchConfiguration('veh'), LaunchConfiguration('num')]
     namespace = f"{os.environ.get('VEHTYPE')}{os.environ.get('VEHNUM')}"
+    namespace = 'RedRover'
 
     # Path to the parameter file
     # param_file_path = ParameterFile(
@@ -32,6 +33,7 @@ def generate_launch_description():
         package='rover_trajectory_opt',
         executable='mpc.py',
         namespace=namespace,
+        remappings=[('/cmd_vel_auto', '/cmd_vel')],
         name='mpc_node',
         output='screen',
         # parameters=[param_file_path]

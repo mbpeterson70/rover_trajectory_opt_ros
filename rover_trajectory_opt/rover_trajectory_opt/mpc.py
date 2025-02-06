@@ -65,7 +65,8 @@ class ModelPredictiveControlNode(Node):
         # Pub & Sub
         # self.sub_pose = self.create_subscription(PoseStamped, "world", self.pose_cb, 10)
         # self.sub_twist = self.create_subscription(TwistStamped, "mocap/twist", self.twist_cb, 10)
-        self.sub_twist = self.create_subscription(TwistStamped, "odom", self.odom_cb, 10)
+        # self.sub_twist = self.create_subscription(TwistStamped, "odom", self.odom_cb, 10) # previous ros2
+        self.sub_twist = self.create_subscription(Odometry, "odom", self.odom_cb, 10) # new ros2
         self.sub_ref = self.create_subscription(RoverState, "trajectory", self.ref_cb, 10)
         self.pub_auto_cmd = self.create_publisher(Twist, "cmd_vel_auto", 10)
 
@@ -76,13 +77,18 @@ class ModelPredictiveControlNode(Node):
         self.no_msg_time = 0.5
                 
     def loop_cb(self):
+        # self.get_logger().info(f'self state is: {self.state}')
+        # self.get_logger().info(f'beforeif statement, inside loop_cb222; states_recieved: {self.states_received()}; ref_recieved: {self.ref_received()}')
         if self.states_received() and self.ref_received():
-            if (self.get_clock().now() - self.last_pose_time).to_sec() > self.no_msg_time or \
-                (self.get_clock().now() - self.last_ref_time).to_sec() > self.no_msg_time:
+            # for the conversion to seconds, it is noted in the rclcpp docs that significant precision
+            # loss is possible depending on sizeof(double), so convert nanoseconds directly instead
+            if (self.get_clock().now() - self.last_pose_time).nanoseconds / 1e9 > self.no_msg_time or \
+                (self.get_clock().now() - self.last_ref_time).nanoseconds / 1e9 > self.no_msg_time:
                 cmd_vel = Twist()
                 cmd_vel.linear.x = 0.
                 cmd_vel.angular.z = 0.
                 self.pub_auto_cmd.publish(cmd_vel)
+                # self.get_logger().info('publishing from here111')
                 return
             # ref_state is in the form [x, y, v, theta]
             # x: x, y, theta
@@ -136,6 +142,7 @@ class ModelPredictiveControlNode(Node):
             except Exception:
                 self.get_logger().error("Planner failed")
         else:
+            # self.get_logger().info('inside else statement333')
             self.pub_auto_cmd.publish(Twist())
         
     # def pose_cb(self, pose_stamped):
@@ -155,22 +162,27 @@ class ModelPredictiveControlNode(Node):
     #     # TODO: did I get that right?
 
     def odom_cb(self, odom_msg: Odometry):
+        # self.get_logger().info('inside callback for odom444')
+        quat = odom_msg.pose.pose.orientation
+        theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.z, quat.w]).as_euler('xyz')[2]
+        self.state[3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
         theta = self.state[3]
-        if np.isnan(theta):
-            return
+        
+        # if np.isnan(theta):
+        #     # self.get_logger().info('theta is nan, returning555')
+        #     return
         
         self.last_pose_time = self.get_clock().now()
         self.state[0] = odom_msg.pose.pose.position.x
         self.state[1] = odom_msg.pose.pose.position.y
-        quat = odom_msg.pose.pose.orientation
-        theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.z, quat.w]).as_euler('xyz')[2]
-        self.state[3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
         
         self.state[2] = odom_msg.twist.twist.linear.x*np.cos(theta) + odom_msg.twist.twist.linear.y*np.sin(theta)
         self.state[4] = odom_msg.twist.twist.angular.z
+        print(np.round(self.state, 2))
         # TODO: did I get that right?
 
     def ref_cb(self, rover_state):
+        # self.get_logger().info('inside ref_cb callback66A')
         self.last_ref_time = self.get_clock().now()
         theta_ref = rover_state.theta
         # TODO: don't use euler angles in trajectory optimization
@@ -188,7 +200,7 @@ class ModelPredictiveControlNode(Node):
             self.ref_states._data = np.append(self.ref_states._data, ref_state.reshape((1,4)), axis=0)
         
     def states_received(self):
-        print(self.state)
+        # print(np.round(self.state,2))
         return not np.any(np.isnan(self.state))
         
     def ref_received(self):
