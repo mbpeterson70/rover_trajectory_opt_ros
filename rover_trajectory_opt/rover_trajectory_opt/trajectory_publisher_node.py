@@ -6,6 +6,7 @@ to navigate to a desired final pose
 """
 
 import rclpy
+from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, TwistStamped, Twist
 from std_srvs.srv import Trigger
 from rover_trajectory_msgs.msg import RoverState
@@ -16,9 +17,11 @@ import json
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
-from robot_utils.robot_data.array_data import ArrayData
+# from robot_utils.robot_data.array_data import ArrayData # this seems to be a depracated reference to the robotdatapy library
+from robotdatapy.data import ArrayData
 
-class TrajectoryPublisherNode():
+
+class TrajectoryPublisherNode(Node):
     def __init__(self):
         super().__init__('trajectory_publisher_node')
 
