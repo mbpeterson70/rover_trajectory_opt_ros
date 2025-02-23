@@ -8,7 +8,7 @@
 #   
 #   min_allowable_dist: 1.5
 
-/**:
+trajectory_generator_node:
   ros__parameters:
     rovers: ['RedRover']
     dt: .02
