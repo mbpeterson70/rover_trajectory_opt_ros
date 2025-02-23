@@ -1,7 +1,5 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.substitutions import EnvironmentVariable, PathJoinSubstitution
-from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -25,7 +23,7 @@ def generate_launch_description():
         get_package_share_directory('rover_trajectory_opt'),
         # 'rover_trajectory_opt',
         'cfg',
-        'single_redrover_trajectory_opt.yaml'
+        'single_rover_trajectory_opt.yaml'
         )
 
     trajectory_generator_node = Node(
