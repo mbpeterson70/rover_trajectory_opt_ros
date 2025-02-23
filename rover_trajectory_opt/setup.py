@@ -30,7 +30,8 @@ setup(
         'console_scripts': [
             'mpc.py = rover_trajectory_opt.mpc:main',
             'simple_trajectory_publisher = rover_trajectory_opt.simple_traj_publisher:main',
-            # 'trajectory_generator_node.py = rover_trajectory_opt.trajectory_generator_node:main',
+            'trajectory_generator_node = rover_trajectory_opt.trajectory_generator_node:main',
+            # 'trajectory_publisher_node = rover_trajectory_opt.trajectory_publisher_node:main',
         ],
     },
 )
