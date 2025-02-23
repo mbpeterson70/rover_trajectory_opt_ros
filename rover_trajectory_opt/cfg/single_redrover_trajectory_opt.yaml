@@ -10,18 +10,30 @@
 
 trajectory_generator_node:
   ros__parameters:
-    rovers: ['RedRover']
+    rovers: ['RedRover', 'RR04']
     dt: .02
     num_timesteps: 100
     goal_states: 
       RedRover: [0.0, 0.0, 0.0, 0.0]
       RR04: [0.0, 0.0, 0.0, 0.0]
-    u_bounds: 
-      high: [1.0, 0.785] # ros2 does not support 2d arrays in yaml files
-      low: [-1.0, -0.785]
+    # u_bounds: 
+    #   high: [1.0, 0.785] # ros2 does not support 2d arrays in yaml files
+    #   low: [-1.0, -0.785]
+    # x_bounds:
+    #   high: [10.0, 10.0, 1.0, .inf]
+    #   low: [-10.0, -10.0, -1.0, -.inf]
+
+    # ros2 does not support 2d arrays in yaml files:
     x_bounds:
-      high: [10.0, 10.0, 1.0, .inf]
-      low: [-10.0, -10.0, -1.0, -.inf]
+      n: 4
+      xb0: [-10.0, 10.0]
+      xb1: [-10.0, 10.0]
+      xb2: [-1.0, 1.0]
+      xb3: [-.inf, .inf]
+    u_bounds:
+      n: 2
+      ub0: [-1.0, 1.0]
+      ub1: [-0.785, 0.785]
     # x_bounds: [[-10.0, 10], [-10.0, 10.0], [-1.0, 1.0], [-inf, inf]]
     # u_bounds: [[-1.0, 1.0], [-0.785, 0.785]]
     min_allowable_dist: 1.5
