@@ -1,0 +1,7 @@
+trajectory_publisher_node:
+  ros__parameters:
+    # rovers: ['RedRover', 'RR04']
+    rovers: ['RedRover']
+    dt: .02
+    trajectory_file: '/home/swarm/data/trajectories/single.json'
+    is_cyclic: True
