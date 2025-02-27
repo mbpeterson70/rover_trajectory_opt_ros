@@ -211,7 +211,7 @@ class TrajectoryGeneratorNode(Node):
         theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.z, quat.w]).as_euler('xyz')[2]
         self.states[rover][3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
 
-        theta = self.state[3]
+        theta = self.states[rover][3]
         if np.isnan(theta):
             return
         

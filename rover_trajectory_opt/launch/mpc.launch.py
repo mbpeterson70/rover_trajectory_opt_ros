@@ -33,7 +33,7 @@ def generate_launch_description():
         package='rover_trajectory_opt',
         executable='mpc.py',
         namespace=namespace,
-        remappings=[('/cmd_vel_auto', '/cmd_vel')],
+        remappings=[(f'/{namespace}/cmd_vel_auto', f'/{namespace}/cmd_vel')],
         name='mpc_node',
         output='screen',
         # parameters=[param_file_path]

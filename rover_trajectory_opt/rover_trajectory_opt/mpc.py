@@ -77,9 +77,11 @@ class ModelPredictiveControlNode(Node):
         self.no_msg_time = 0.5
                 
     def loop_cb(self):
-        # self.get_logger().info(f'self state is: {self.state}')
+        self.get_logger().info(f'self state is: {self.state}')
+        
         # self.get_logger().info(f'beforeif statement, inside loop_cb222; states_recieved: {self.states_received()}; ref_recieved: {self.ref_received()}')
         if self.states_received() and self.ref_received():
+            self.get_logger().info('states recieved')
             # for the conversion to seconds, it is noted in the rclcpp docs that significant precision
             # loss is possible depending on sizeof(double), so convert nanoseconds directly instead
             if (self.get_clock().now() - self.last_pose_time).nanoseconds / 1e9 > self.no_msg_time or \
@@ -142,8 +144,10 @@ class ModelPredictiveControlNode(Node):
             except Exception:
                 self.get_logger().error("Planner failed")
         else:
-            # self.get_logger().info('inside else statement333')
+            self.get_logger().info('states not recieved')
             self.pub_auto_cmd.publish(Twist())
+
+    # -----------------------------------------------------------------------------------------
         
     # def pose_cb(self, pose_stamped):
     #     self.last_pose_time = self.get_clock().now()
@@ -162,7 +166,7 @@ class ModelPredictiveControlNode(Node):
     #     # TODO: did I get that right?
 
     def odom_cb(self, odom_msg: Odometry):
-        # self.get_logger().info('inside callback for odom444')
+        self.get_logger().info('[CALLED] inside callback for odom')
         quat = odom_msg.pose.pose.orientation
         theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.z, quat.w]).as_euler('xyz')[2]
         self.state[3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap
@@ -178,19 +182,32 @@ class ModelPredictiveControlNode(Node):
         
         self.state[2] = odom_msg.twist.twist.linear.x*np.cos(theta) + odom_msg.twist.twist.linear.y*np.sin(theta)
         self.state[4] = odom_msg.twist.twist.angular.z
-        print(np.round(self.state, 2))
+        print('twist msg', np.round(self.state, 2))
         # TODO: did I get that right?
 
     def ref_cb(self, rover_state):
-        # self.get_logger().info('inside ref_cb callback66A')
+        # self.get_logger().info('inside ref_cb callback')
+        # self.get_logger().info(f'ref state is {rover_state}')
+
         self.last_ref_time = self.get_clock().now()
         theta_ref = rover_state.theta
         # TODO: don't use euler angles in trajectory optimization
-        while self.state[3] - theta_ref > np.pi:
-            theta_ref += 2*np.pi
-        while theta_ref - self.state[3] > np.pi:
-            theta_ref -= 2*np.pi
+
+        # try changing the below to ensure that the odom cb gets called? maybe remove while loops?
+        # while self.state[3] - theta_ref > np.pi:
+        #     theta_ref += 2*np.pi
+        # while theta_ref - self.state[3] > np.pi:
+        #     theta_ref -= 2*np.pi
+
+        # same as above lines, without looping
+        theta_ref = self.state[3] + np.arctan2(np.sin(theta_ref - self.state[3]), np.cos(theta_ref - self.state[3]))
+
+        # self.get_logger().info('after while loop in ref_cb')
+        
         ref_state = np.array([rover_state.x, rover_state.y, rover_state.v, theta_ref])
+        # self.get_logger().info(f'ref state internal is {ref_state}')
+        
+        
         # ref_state is in the form [x, y, v, theta]
         if self.ref_states.times is None:
             self.ref_states.times = np.array([rover_state.t])
@@ -205,7 +222,7 @@ class ModelPredictiveControlNode(Node):
         
     def ref_received(self):
         if self.ref_states._data is not None:
-            print(self.ref_states._data[-1])
+            print('ref states', self.ref_states._data[-1])
         else:
             print(None)
         return self.ref_states._data is not None

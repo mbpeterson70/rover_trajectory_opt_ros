@@ -51,7 +51,7 @@ class TrajectoryPublisherNode(Node):
         self.trajectory_file = self.get_parameter("trajectory_file").value
 
         # self.is_cyclic = self.get_parameter("trajectory_publisher/is_cyclic")
-        self.dt = self.get_parameter("is_cyclic").value 
+        self.is_cyclic = self.get_parameter("is_cyclic").value 
 
         
         # Internal variables
@@ -77,7 +77,8 @@ class TrajectoryPublisherNode(Node):
             self.trajectories.append([])
             for j in range(self.num_rovers):
                 self.trajectories[i].append(
-                    ArrayData(time_array=time_array[i,:], data_array=traj_array[i,j,:,:], interp=True)
+                    # ArrayData(time_array=time_array[i,:], data_array=traj_array[i,j,:,:], interp=True)
+                    ArrayData(time_array=time_array[i,:], data_array=traj_array[i,j,:,:], interp=True, time_tol=0.2) # manually set time tolerance
                 )
         self.tfs = time_array[:,-1]
         
@@ -96,10 +97,10 @@ class TrajectoryPublisherNode(Node):
         if self.t > self.tfs[self.seg_idx]:
             if self.seg_idx + 1 < self.num_segs:
                 self.seg_idx += 1
-                self.t = 0
+                self.t = 0.0
             elif self.is_cyclic:
                 self.seg_idx = 0
-                self.t = 0
+                self.t = 0.0
             else:
                 assert False, "This option is currently not supported."
         
@@ -132,6 +133,8 @@ class TrajectoryPublisherNode(Node):
             # cmd_vel.angular.z = th_dot_cmd
             # self.pub_auto_cmd[rover].publish(cmd_vel)
         self.t += self.dt
+        if self.t - int(self.t) <= 0.02:
+            self.get_logger().info(f'time: {self.t}, rover state: {rover_state.x, rover_state.y, rover_state.v}')
         return
         
     def odom_cb(self, odom_msg: Odometry, rover):
@@ -142,7 +145,7 @@ class TrajectoryPublisherNode(Node):
         #should there be/not be a negative sign here (below)? there is no neg in mpc.py but there was in the ros1 implementation of this file
         self.states[rover][3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap 
 
-        theta = self.state[3]
+        theta = self.states[rover][3]
         if np.isnan(theta):
             return
         
