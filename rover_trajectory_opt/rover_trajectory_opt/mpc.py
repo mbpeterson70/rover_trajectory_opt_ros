@@ -26,21 +26,29 @@ class ModelPredictiveControlNode(Node):
         super().__init__('mpc_node')
 
         # Params
-        self.declare_parameter("mpc/dt", 0.2)
-        self.declare_parameter("mpc/num_timesteps", 5)
-        self.declare_parameter("mpc/tf", 1.0)
+        self.declare_parameter("dt", 0.2)
+        self.declare_parameter("num_timesteps", 0)
+        self.declare_parameter("tf", 1.0)
         # TODO: make param
-        # self.declare_parameter("mpc/x_bounds", [-10.0, 10, -10.0, 10.0, -float('inf'), float('inf')])
-        # self.declare_parameter("mpc/u_bounds", [-1.0, 1.0, -1.5, 1.5])
+        # self.declare_parameter("x_bounds", [-10.0, 10, -10.0, 10.0, -float('inf'), float('inf')])
+        # self.declare_parameter("u_bounds", [-1.0, 1.0, -1.5, 1.5])
+        self.declare_parameter("x_bounds", None)
+        self.declare_parameter("u_bounds", None)
+        self.declare_parameter("x_bounds.n", 0)
+        self.declare_parameter("u_bounds.n", 0)
 
-        self.dt = self.get_parameter("mpc/dt").value
-        self.mpc_num_timesteps = self.get_parameter("mpc/num_timesteps").value
-        self.mpc_tf = self.get_parameter("mpc/tf").value
+        self.dt = self.get_parameter("dt").value
+        self.mpc_num_timesteps = self.get_parameter("num_timesteps").value
+        self.mpc_tf = self.get_parameter("tf").value
 
-        # x_bounds = np.array(self.get_parameter("mpc/x_bounds").value).reshape((3,2))
-        # u_bounds = np.array(self.get_parameter("mpc/u_bounds").value).reshape((2,2))
-        x_bounds = np.array([[-np.inf, np.inf], [-np.inf, np.inf], [-np.inf, np.inf]])
-        u_bounds = np.array([[-1.0, 1.0], [-1.5, 1.5]])
+        x_bound_num = self.get_parameter('x_bounds.n').value
+        {self.declare_parameter(f'x_bounds.xb{i}') for i in range(x_bound_num)}
+        x_bounds = np.array([self.get_parameter(f'x_bounds.xb{i}').value for i in range(x_bound_num)])
+
+        u_bound_num = self.get_parameter('u_bounds.n').value
+        {self.declare_parameter(f'u_bounds.ub{i}') for i in range(u_bound_num)}
+        u_bounds = np.array([self.get_parameter(f'u_bounds.ub{i}').value for i in range(u_bound_num)])
+
         self.x_bounds = np.zeros(x_bounds.shape)
         self.u_bounds = np.zeros(u_bounds.shape)
         self.u_diff_bounds = np.array([3.0, 3.0])
@@ -66,9 +74,9 @@ class ModelPredictiveControlNode(Node):
         # self.sub_pose = self.create_subscription(PoseStamped, "world", self.pose_cb, 10)
         # self.sub_twist = self.create_subscription(TwistStamped, "mocap/twist", self.twist_cb, 10)
         # self.sub_twist = self.create_subscription(TwistStamped, "odom", self.odom_cb, 10) # previous ros2
-        self.sub_twist = self.create_subscription(Odometry, "odom", self.odom_cb, 10) # new ros2
-        self.sub_ref = self.create_subscription(RoverState, "trajectory", self.ref_cb, 10)
-        self.pub_auto_cmd = self.create_publisher(Twist, "cmd_vel_auto", 10)
+        self.sub_twist = self.create_subscription(Odometry, "odom", self.odom_cb, 1) # changed queue size to 1 from 10
+        self.sub_ref = self.create_subscription(RoverState, "trajectory", self.ref_cb, 1)
+        self.pub_auto_cmd = self.create_publisher(Twist, "cmd_vel_auto", 1)
 
         # Timer
         self.timer = self.create_timer(self.dt, self.loop_cb)
@@ -77,11 +85,8 @@ class ModelPredictiveControlNode(Node):
         self.no_msg_time = 0.5
                 
     def loop_cb(self):
-        self.get_logger().info(f'self state is: {self.state}')
-        
-        # self.get_logger().info(f'beforeif statement, inside loop_cb222; states_recieved: {self.states_received()}; ref_recieved: {self.ref_received()}')
         if self.states_received() and self.ref_received():
-            self.get_logger().info('states recieved')
+            # self.get_logger().info('states recieved')
             # for the conversion to seconds, it is noted in the rclcpp docs that significant precision
             # loss is possible depending on sizeof(double), so convert nanoseconds directly instead
             if (self.get_clock().now() - self.last_pose_time).nanoseconds / 1e9 > self.no_msg_time or \
@@ -144,7 +149,7 @@ class ModelPredictiveControlNode(Node):
             except Exception:
                 self.get_logger().error("Planner failed")
         else:
-            self.get_logger().info('states not recieved')
+            # self.get_logger().info('states not recieved')
             self.pub_auto_cmd.publish(Twist())
 
     # -----------------------------------------------------------------------------------------
@@ -166,7 +171,7 @@ class ModelPredictiveControlNode(Node):
     #     # TODO: did I get that right?
 
     def odom_cb(self, odom_msg: Odometry):
-        self.get_logger().info('[CALLED] inside callback for odom')
+        # self.get_logger().info('[CALLED] inside callback for odom')
         quat = odom_msg.pose.pose.orientation
         theta_unwrapped = Rot.from_quat([quat.x, quat.y, quat.z, quat.w]).as_euler('xyz')[2]
         self.state[3] = ((theta_unwrapped + np.pi) % (2 * np.pi) - np.pi) # wrap

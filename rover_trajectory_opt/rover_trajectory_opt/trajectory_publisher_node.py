@@ -77,8 +77,8 @@ class TrajectoryPublisherNode(Node):
             self.trajectories.append([])
             for j in range(self.num_rovers):
                 self.trajectories[i].append(
-                    # ArrayData(time_array=time_array[i,:], data_array=traj_array[i,j,:,:], interp=True)
-                    ArrayData(time_array=time_array[i,:], data_array=traj_array[i,j,:,:], interp=True, time_tol=0.2) # manually set time tolerance
+                    ArrayData(time_array=time_array[i,:], data_array=traj_array[i,j,:,:], interp=True)
+                    # ArrayData(time_array=time_array[i,:], data_array=traj_array[i,j,:,:], interp=True, time_tol=0.1) # manually set time tolerance, it seems that .2 is slightly to small
                 )
         self.tfs = time_array[:,-1]
         

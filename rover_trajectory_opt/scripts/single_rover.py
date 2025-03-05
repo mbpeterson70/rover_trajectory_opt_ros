@@ -17,15 +17,27 @@ u_bounds = np.array([[-0.25, 0.25], [-0.785, 0.785]])
 
 obstacles = []
 
+# waypoints = np.array([
+#     [
+#         [-3., -2., np.pi/4],
+#         [3, 3, np.pi/4],
+#         [3, -2, 3*np.pi/4],
+#         [-3, 3, 3*np.pi/4],
+#         [-3., -2., np.pi/4]
+#     ],
+# ])
+
 waypoints = np.array([
     [
-        [-3., -2., np.pi/4],
+        [0, 0, np.pi/4],
         [3, 3, np.pi/4],
-        [3, -2, 3*np.pi/4],
-        [-3, 3, 3*np.pi/4],
+        [3.5, 2.5, -np.pi/4],
+        [3, -2, -2*np.pi/4],
+        [-3, 3, -1.5*np.pi/4],
         [-3., -2., np.pi/4]
     ],
 ])
+
 output_file = '/home/swarm/data/trajectories/single.json'
 
 # setup

@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from rover_trajectory_msgs.msg import RoverState
+import numpy as np
 
 # from std_msgs.msg import String
 
@@ -16,19 +17,61 @@ class SimpleTrajectoryPublisher(Node):
         self.t = 0.
 
     def timer_callback(self):
+        # # msg = String()
+        # # msg.data = 'Hello World: %d' % self.i
+        # rover_state = RoverState()
+        # rover_state.t = self.t
+        # # rover_state.tf = 1.
+        # rover_state.x = self.t/2
+        # rover_state.y = 0.
+        # rover_state.v = 0.5
+        # rover_state.theta = 0.
+        # self.publisher_.publish(rover_state)
+        # # self.get_logger().info('Publishing: "%s"' % msg.data)
+        # self.i += 1
+        # self.t += self.timer_period
+        
+        
         # msg = String()
         # msg.data = 'Hello World: %d' % self.i
         rover_state = RoverState()
         rover_state.t = self.t
         # rover_state.tf = 1.
-        rover_state.x = self.t/2
-        rover_state.y = 0.
-        rover_state.v = 0.5
-        rover_state.theta = 0.
-        self.publisher_.publish(rover_state)
-        # self.get_logger().info('Publishing: "%s"' % msg.data)
-        self.i += 1
-        self.t += self.timer_period
+        if self.t < 5:
+            rover_state.x = self.t/2
+            rover_state.y = 0.
+            rover_state.v = 0.5
+            rover_state.theta = 0.
+            self.publisher_.publish(rover_state)
+            # self.get_logger().info('Publishing: "%s"' % msg.data)
+            self.i += 1
+            self.t += self.timer_period
+        else:
+            ang = np.pi/20
+            rover_state.x = 5/2+self.t/2*np.cos(ang)
+            rover_state.y = self.t/2*np.sin(ang)
+            rover_state.v = 0.5
+            rover_state.theta = ang
+            self.publisher_.publish(rover_state)
+            # self.get_logger().info('Publishing: "%s"' % msg.data)
+            self.i += 1
+            self.t += self.timer_period
+
+        # # msg = String()
+        # # msg.data = 'Hello World: %d' % self.i
+        # r = 1 # circle radius
+        # rover_state = RoverState()
+        # rover_state.t = self.t
+        # # rover_state.tf = 1.
+        # rover_state.v = 0.5
+        # rover_state.x = r*np.cos(self.t*r*rover_state.v)-1
+        # rover_state.y = -r*np.sin(self.t*r*rover_state.v)
+        # rover_state.theta = self.t*r*rover_state.v
+        # self.publisher_.publish(rover_state)
+        # # self.get_logger().info('Publishing: "%s"' % msg.data)
+        # self.i += 1
+        # self.t += self.timer_period
+
 
 def main(args=None):
     rclpy.init(args=args)
